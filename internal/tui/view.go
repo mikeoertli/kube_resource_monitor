@@ -193,8 +193,20 @@ func (m *Model) footer() string {
 		pos = p.Muted.Render(fmt.Sprintf("  [%d/%d]", m.cursor+1, len(m.flat)))
 	}
 
-	hints := p.Muted.Render("?") + p.Muted.Render(" help  ") +
-		p.Muted.Render("/ filter  t group  s sort  c containers  p pause  Q quit")
+	// For the first few seconds, spend the hint line on orientation rather than
+	// on the key list. Bare `krm` drops you straight into a full-screen view
+	// that redraws on a timer, and nothing else on screen says so outright --
+	// this line names the mode, the way out, and the one-shot alternative.
+	var hints string
+	if m.orienting() {
+		hints = p.Accent.Render("live view") +
+			p.Muted.Render(fmt.Sprintf(" · refreshing every %s · ", intervalLabel(m.cfg.Interval))) +
+			p.Value.Render("Q") + p.Muted.Render(" quit · ") +
+			p.Value.Render("?") + p.Muted.Render(" keys · ") +
+			p.Muted.Render("`krm top` prints one table instead")
+	} else {
+		hints = p.Muted.Render("? help  / filter  t group  s sort  c containers  p pause  Q quit")
+	}
 
 	line1 := clip(totals+pos, m.width)
 	line2 := clip(m.tbl.Legend(), m.width)
@@ -205,6 +217,18 @@ func (m *Model) footer() string {
 		filterNote = p.Accent.Render("  filter:"+v) + p.Muted.Render(" (esc to clear)")
 	}
 	return line1 + filterNote + "\n" + line2 + "\n" + line3
+}
+
+// orientingWindow is how long the footer explains the mode before reverting to
+// the key list. Long enough to read once, short enough not to nag.
+const orientingWindow = 12 * time.Second
+
+// orienting reports whether the view is still showing its opening hint.
+func (m *Model) orienting() bool {
+	if m.started.IsZero() {
+		return false
+	}
+	return time.Since(m.started) < orientingWindow
 }
 
 func (m *Model) helpView() string {
@@ -223,6 +247,14 @@ func (m *Model) helpView() string {
 		}
 		b.WriteString("\n")
 	}
+
+	b.WriteString(p.Accent.Render("Modes"))
+	b.WriteString("\n")
+	b.WriteString("  " + p.Value.Render(pad("krm", 14)) + p.Muted.Render("this live view on a terminal; one table when piped\n"))
+	b.WriteString("  " + p.Value.Render(pad("krm top", 14)) + p.Muted.Render("one table, then exit — stays in your scrollback\n"))
+	b.WriteString("  " + p.Value.Render(pad("krm watch", 14)) + p.Muted.Render("this view, named explicitly\n"))
+	b.WriteString("  " + p.Value.Render(pad("krm notify", 14)) + p.Muted.Render("watch thresholds and send notifications\n"))
+	b.WriteString("\n")
 
 	b.WriteString(p.Accent.Render("Color scale"))
 	b.WriteString("\n  ")

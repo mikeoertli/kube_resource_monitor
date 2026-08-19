@@ -61,8 +61,12 @@ type Model struct {
 	paused  bool
 	loading bool
 
-	filter      textinput.Model
-	filtering   bool
+	filter    textinput.Model
+	filtering bool
+	// started is when the view opened, used to show a transient orientation
+	// hint. Someone who typed a bare `krm` may not realize they have entered a
+	// live, full-screen view at all.
+	started     time.Time
 	showHelp    bool
 	lastErr     error
 	lastRefresh time.Time
@@ -93,6 +97,7 @@ func New(cfg Config) *Model {
 		expanded: map[string]bool{},
 		filter:   ti,
 		tbl:      render.NewTable(cfg.Palette, cfg.Render),
+		started:  time.Now(),
 	}
 	m.filter.SetValue(cfg.Options.NamePattern)
 	return m

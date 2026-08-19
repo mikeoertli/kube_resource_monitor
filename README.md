@@ -69,17 +69,31 @@ certificate metrics-server cannot verify, and the pod will sit NotReady. Add
 `--insecure-kubelet-tls` to the install, or fix the certificates properly on
 anything you care about.
 
+## Modes
+
+| Command | What it does |
+| --- | --- |
+| `krm` | **Live view**, refreshing until you quit — when stdout is a terminal |
+| `krm` | One table, then exit — when piped or redirected |
+| `krm top` | One table, then exit — always |
+| `krm watch` | Live view — always |
+| `krm notify` | Watch thresholds and send notifications |
+
+Bare `krm` reads its environment the same way `git log` decides whether to
+reach for a pager: on a terminal you get the interactive view, and
+`krm | grep web` or `krm -o json` give you plain output you can pipe.
+
+The one thing worth committing to memory: **`krm top` is the single snapshot.**
+Reach for it when you want numbers in your scrollback rather than a full-screen
+view that takes over the terminal.
+
 ## Usage
 
-Running `krm` with no arguments opens the interactive view when stdout is a
-terminal, and prints a single table otherwise — so `krm` is interactive while
-`krm | grep web` and `krm -o json` are not.
-
 ```sh
-krm                                  # interactive, current context and namespace
+krm                                  # live view, current context and namespace
+krm top                              # one table, then exit
 krm -A                               # every namespace
 krm --context prod-east -n payments  # explicit context and namespace
-krm top                              # print once and exit
 krm top -o json | jq '.rows[0]'      # machine-readable
 ```
 
@@ -124,8 +138,13 @@ krm --bar-style ascii      # for terminals that mangle box drawing
 ### Watching
 
 ```sh
+krm            # live view (on a terminal)
+krm watch      # the same thing, named explicitly
 krm watch -i 10s
 ```
+
+`krm watch` refuses to run when stdout is not a terminal rather than writing
+cursor escapes into your pipe; use `krm top` there.
 
 Keys: 
 - `?` help 

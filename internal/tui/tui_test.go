@@ -423,3 +423,43 @@ func TestTruncatePreservesEscapeSequences(t *testing.T) {
 		t.Errorf("escape sequence was cut in half: %q", got)
 	}
 }
+
+// Someone who typed a bare `krm` may not realize they have entered a live,
+// full-screen view at all. The footer says so on arrival, then gets out of the
+// way and goes back to being a key list.
+func TestFooterOrientsOnArrivalThenRevertsToKeys(t *testing.T) {
+	stub := &stubCollector{snap: testSnapshot()}
+	m := newTestModel(t, stub)
+	deliver(m, m.collect())
+
+	fresh := m.View()
+	for _, want := range []string{"live view", "refreshing every", "krm top", "quit"} {
+		if !strings.Contains(fresh, want) {
+			t.Errorf("opening footer missing %q:\n%s", want, fresh)
+		}
+	}
+
+	// Wind the clock past the orientation window.
+	m.started = time.Now().Add(-2 * orientingWindow)
+	settled := m.View()
+	if strings.Contains(settled, "krm top") {
+		t.Error("the orientation hint should not persist")
+	}
+	if !strings.Contains(settled, "? help") {
+		t.Errorf("footer should revert to the key list:\n%s", settled)
+	}
+}
+
+func TestHelpOverlayExplainsTheModes(t *testing.T) {
+	stub := &stubCollector{snap: testSnapshot()}
+	m := newTestModel(t, stub)
+	deliver(m, m.collect())
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	out := m.View()
+	for _, want := range []string{"Modes", "krm top", "krm watch", "krm notify", "piped"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("help overlay missing %q:\n%s", want, out)
+		}
+	}
+}

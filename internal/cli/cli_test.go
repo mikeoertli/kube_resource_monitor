@@ -278,3 +278,89 @@ func asExitCode(err error, target **exitCodeError) bool {
 	}
 	return false
 }
+
+// Bare `krm` picks its mode from the environment. Under `go test` stdout is not
+// a terminal, so it must take the one-shot path rather than trying to open a
+// full-screen view into a pipe.
+func TestBareCommandPrintsOneTableWhenNotATerminal(t *testing.T) {
+	out, err := run(t, "-n", "prod")
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "NAME") || !strings.Contains(out, "TOTAL") {
+		t.Errorf("expected a one-shot table:\n%s", out)
+	}
+}
+
+// `krm watch` is explicit, so it cannot fall back — it has to say why.
+func TestWatchRefusesWhenStdoutIsNotATerminal(t *testing.T) {
+	_, err := run(t, "watch")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "terminal") {
+		t.Errorf("error should say a terminal is required: %v", err)
+	}
+	if !strings.Contains(err.Error(), "krm top") {
+		t.Errorf("error should point at the alternative: %v", err)
+	}
+}
+
+// A wrong --output is a mistake in what was typed; not-a-terminal is a property
+// of how it was run. The typed mistake should be reported first.
+func TestWatchReportsOutputMistakeBeforeTerminalCheck(t *testing.T) {
+	_, err := run(t, "watch", "-o", "json")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if strings.Contains(err.Error(), "terminal") {
+		t.Errorf("the --output problem should be reported first: %v", err)
+	}
+	if !strings.Contains(err.Error(), "krm top -o json") {
+		t.Errorf("error should suggest the exact command: %v", err)
+	}
+}
+
+// -w/--watch and --once were removed: two named subcommands plus an adaptive
+// default is the whole surface, and duplicate entry points are what made the
+// default confusing in the first place.
+func TestRedundantModeFlagsAreGone(t *testing.T) {
+	for _, flag := range []string{"--watch", "-w", "--once"} {
+		_, err := run(t, flag)
+		if err == nil {
+			t.Errorf("%s should no longer be accepted on the root command", flag)
+			continue
+		}
+		if !strings.Contains(err.Error(), "unknown") && !strings.Contains(err.Error(), "flag") {
+			t.Errorf("%s: unexpected error %v", flag, err)
+		}
+	}
+	// `krm notify --once` is a different flag on a different command and stays.
+	if _, err := run(t, "notify", "--on", "cpu>99999m", "--once", "--stdout"); err != nil {
+		t.Errorf("notify --once should still work: %v", err)
+	}
+}
+
+// The mode table is the first thing a reader should hit, because "what does
+// bare krm do" is the question the help exists to answer.
+func TestHelpLeadsWithTheModeTable(t *testing.T) {
+	out, err := run(t, "--help")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	idx := strings.Index(out, "MODES")
+	if idx < 0 {
+		t.Fatalf("help has no MODES block:\n%s", out)
+	}
+	if usage := strings.Index(out, "Usage:"); usage >= 0 && idx > usage {
+		t.Error("the MODES block should appear before the Usage section")
+	}
+	for _, want := range []string{"stdout is a terminal", "piped or redirected", "krm top", "krm watch"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("help missing %q", want)
+		}
+	}
+	if !strings.Contains(out, "Examples:") {
+		t.Errorf("help should carry worked examples:\n%s", out)
+	}
+}

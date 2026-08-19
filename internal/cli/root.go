@@ -18,15 +18,40 @@ import (
 const longDescription = `krm shows what your Kubernetes workloads are actually consuming,
 with the requests and limits they were promised alongside.
 
-It reads the same metrics.k8s.io, so it needs metrics-server installed --
-run "krm install-metrics-server" if it is not.
+MODES
+  krm          live view, refreshing until you quit    (stdout is a terminal)
+  krm          one table, then exit                    (piped or redirected)
+  krm top      one table, then exit                    (always)
+  krm watch    live view                               (always)
+  krm notify   watch thresholds, send notifications
+
+So "krm" on its own opens the interactive view, while "krm | grep web" and
+"krm -o json" print plain output you can pipe. Reach for "krm top" when you
+want a single snapshot without leaving your scrollback.
+
+It reads the same metrics.k8s.io API that kubectl top uses, so it needs
+metrics-server installed -- run "krm install-metrics-server" if it is not.
 Unlike kubectl top it can roll usage up to the Deployment or StatefulSet that
 owns a pod, break it down to individual containers, color everything by how
-close it is to its limit, and stay open watching it change.
+close it is to its limit, and stay open watching it change.`
 
-With no subcommand krm opens the interactive view when stdout is a terminal,
-and prints a single table otherwise -- so "krm" is interactive and
-"krm | grep web" or "krm -o json" are not.`
+const rootExamples = `  # live view of the current context and namespace
+  krm
+
+  # a single snapshot, even on a terminal
+  krm top
+
+  # every namespace, broken down by container
+  krm -A -c
+
+  # only what is close to its limit
+  krm --only-problems
+
+  # feed the numbers somewhere else
+  krm top -o json | jq '.rows[]'
+
+  # alert when anything passes 85% of its CPU limit
+  krm notify --on 'cpu>85%'`
 
 // Execute runs the root command.
 func Execute() int {
@@ -55,26 +80,29 @@ func Execute() int {
 
 func newRootCommand() *cobra.Command {
 	f := &globalFlags{}
-	var watch, once bool
 
 	root := &cobra.Command{
-		Use:           "krm",
-		Short:         "Monitor Kubernetes resource usage in the terminal",
-		Long:          longDescription,
+		Use:     "krm",
+		Short:   "Monitor Kubernetes resource usage — live view on a terminal, one table when piped",
+		Long:    longDescription,
+		Example: rootExamples,
+
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			interactive := watch || (!once && isTerminal() && f.output == "table")
-			if interactive {
+			// Bare `krm` picks its mode from the environment, the way git
+			// reaches for a pager only on a terminal. There is deliberately no
+			// flag to override this: `krm top` and `krm watch` name the two
+			// modes outright, and a third and fourth way to say the same thing
+			// made the surface harder to hold in your head, not easier.
+			if isTerminal() && f.output == "table" {
 				return runWatch(cmd, f)
 			}
 			return runOnce(cmd, f)
 		},
 	}
 	f.register(root)
-	root.Flags().BoolVarP(&watch, "watch", "w", false, "open the interactive view even when not writing to a terminal")
-	root.Flags().BoolVar(&once, "once", false, "print a single table and exit, even on a terminal")
 
 	root.AddCommand(
 		newTopCommand(f),
@@ -90,11 +118,14 @@ func newRootCommand() *cobra.Command {
 func newTopCommand(f *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "top",
-		Short: "Print resource usage once and exit",
+		Short: "Print one table and exit (no live view)",
 		Long: `Print a single snapshot and exit.
 
-This is the scriptable mode: combine it with -o json, -o csv, or -o prometheus
-to feed the numbers somewhere else.`,
+Use this when you want numbers in your scrollback rather than a full-screen
+view -- bare "krm" on a terminal opens the live view instead.
+
+This is also the scriptable mode: combine it with -o json, -o csv, or
+-o prometheus to feed the numbers somewhere else.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error { return runOnce(cmd, f) },
 	}
@@ -103,12 +134,16 @@ to feed the numbers somewhere else.`,
 func newWatchCommand(f *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "watch",
-		Short: "Open the interactive watch view",
+		Short: "Open the live view (what bare `krm` does on a terminal)",
 		Long: `Open the interactive view and refresh until you quit.
+
+This is what bare "krm" already does when stdout is a terminal; naming it
+explicitly is useful in aliases and documentation, where relying on terminal
+detection would be obscure.
 
 Press ? inside for the full key list. Highlights: t cycles grouping, s cycles
 sort, / filters, c toggles container breakdown, + and - change the refresh
-interval, and p pauses.`,
+interval, p pauses, and Q quits.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error { return runWatch(cmd, f) },
 	}
@@ -250,14 +285,28 @@ func writeMachine(out io.Writer, r *resolved, snap *inventory.Snapshot) error {
 // runWatch opens the interactive view.
 func runWatch(cmd *cobra.Command, f *globalFlags) error {
 	ctx := cmd.Context()
+
+	// Both guards run before connecting to the cluster, so a mistake in the
+	// command line fails immediately rather than after a kubeconfig round trip.
+	// Format is checked first because it names a concrete mistake in what the
+	// user typed, while "not a terminal" is a property of how they ran it.
+
+	// The interactive view always renders a table, so `krm watch -o json` is a
+	// contradiction worth calling out rather than silently ignoring.
+	if format, err := render.ParseFormat(f.output); err == nil && format != render.FormatTable {
+		return fmt.Errorf("--output %s cannot be combined with the live view; use `krm top -o %s` instead", format, format)
+	}
+	// This only bites on an explicit `krm watch`, since bare `krm` already
+	// routes to the one-shot path when stdout is not a terminal. Without it,
+	// `krm watch | tee log` would write cursor-positioning escapes into the
+	// file and appear to hang.
+	if !isTerminal() {
+		return fmt.Errorf("the live view needs a terminal and stdout is not one; use `krm top` to print a single table")
+	}
+
 	r, err := f.resolve(ctx)
 	if err != nil {
 		return err
-	}
-	// The interactive view always renders a table; -o json with --watch is a
-	// contradiction worth calling out rather than silently ignoring.
-	if r.format != render.FormatTable {
-		return fmt.Errorf("--output %s cannot be combined with the interactive view; use `krm top -o %s` instead", r.format, r.format)
 	}
 
 	return tui.Run(tui.Config{
