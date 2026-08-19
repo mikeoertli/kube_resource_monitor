@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="krm">
+  <title>krm</title>
+  <!--
+    Hero mark: a workload bar with two pod bars indented beneath it, joined by
+    a tree connector. Encodes the rollup that separates krm from `kubectl top`.
+    The indent needs roughly 32px to read, so use icon.svg for small surfaces.
+  -->
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+
+  <!-- parent: workload -->
+  <rect x="10" y="14" width="44" height="8" rx="4" fill="#1e293b"/>
+  <rect x="10" y="14" width="31" height="8" rx="4" fill="#22c55e"/>
+
+  <!-- tree connector -->
+  <rect x="13" y="24"   width="2.6" height="25"  rx="1.3" fill="#475569"/>
+  <rect x="13" y="31"   width="7"   height="2.6" rx="1.3" fill="#475569"/>
+  <rect x="13" y="46.4" width="7"   height="2.6" rx="1.3" fill="#475569"/>
+
+  <!-- children: pods -->
+  <rect x="21" y="28.5" width="33" height="8" rx="4" fill="#1e293b"/>
+  <rect x="21" y="28.5" width="14" height="8" rx="4" fill="#facc15"/>
+  <rect x="21" y="43.5" width="33" height="8" rx="4" fill="#1e293b"/>
+  <rect x="21" y="43.5" width="29" height="8" rx="4" fill="#f87171"/>
+</svg>

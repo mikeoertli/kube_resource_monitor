@@ -1,11 +1,19 @@
+<p align="center">
+  <img src="assets/png/logo-256.png" alt="project icon" align="center" width="128" height="128">
+</p>
+  
 # kube-resource-monitor (`krm`)
 
-> **Notice:**
+> **⚠️ Notice:**
 > _This is very preliminary and is subject to change, possibly drastically._
 
 A terminal UI for monitoring Kubernetes workload resource usage with snapshot
 or watching indefinitely. Workload resource usage is contextualized with the
 resource request and limit settings.
+
+<p align="center">
+  <img src="assets/png/krm_demo.png" alt="demo screenshot of 'krm --demo'" align="center" width="65%">
+</p>
 
 ```
 ● krm  kind-dev · prod                    group workload  sort cpu↓  every 5s  3s ago (30s avg)
@@ -100,6 +108,10 @@ krm --only-problems             # only rows at or above --threshold (default 85%
 ```
 
 ### Columns
+
+<p align="center">
+  <img src="assets/png/krm_demo_requests_limits_restarts_age.png" alt="demo screenshot of command: 'krm --show-restarts --show-age --requests --limits --demo'" align="center" width="85%">
+</p>
 
 ```sh
 krm --requests --limits    # show the declared values alongside usage
