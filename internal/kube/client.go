@@ -17,6 +17,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
+
+	"github.com/mikeoertli/kube_resource_monitor/internal/buildinfo"
 )
 
 // MetricsGroupVersion is the API group the metrics-server serves.
@@ -120,7 +122,7 @@ func Connect(opts Options) (*Client, error) {
 	}
 	// A descriptive user agent makes this tool identifiable in apiserver audit
 	// logs, which matters when someone is hunting a source of read load.
-	restCfg.UserAgent = "kube-resource-monitor/" + Version()
+	restCfg.UserAgent = buildinfo.UserAgent()
 
 	kc, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {

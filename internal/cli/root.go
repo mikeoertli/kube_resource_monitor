@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/mikeoertli/kube_resource_monitor/internal/buildinfo"
 	"github.com/mikeoertli/kube_resource_monitor/internal/inventory"
 	"github.com/mikeoertli/kube_resource_monitor/internal/kube"
 	"github.com/mikeoertli/kube_resource_monitor/internal/model"
@@ -110,7 +112,7 @@ func newRootCommand() *cobra.Command {
 		newNotifyCommand(f),
 		newInstallCommand(f),
 		newContextsCommand(f),
-		newVersionCommand(),
+		newVersionCommand(f),
 	)
 	return root
 }
@@ -176,16 +178,40 @@ func newContextsCommand(f *globalFlags) *cobra.Command {
 	}
 }
 
-func newVersionCommand() *cobra.Command {
-	return &cobra.Command{
+func newVersionCommand(f *globalFlags) *cobra.Command {
+	var short bool
+
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
-		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, _ []string) {
-			v, commit, date := kube.BuildInfo()
-			fmt.Fprintf(cmd.OutOrStdout(), "krm %s (commit %s, built %s)\n", v, commit, date)
+		Long: `Print the version, commit, build date, Go version, and platform.
+
+Where those values come from depends on how the binary was built: "make build"
+stamps them in directly, "go install ...@v0.2.0" records the module version,
+and "go build" in a checkout records the git revision. The "source" field in
+-o json output says which route this build took, which is the quickest way to
+explain a version that reads "dev".`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			info := buildinfo.Get()
+			out := cmd.OutOrStdout()
+
+			switch {
+			case short:
+				// Bare version string, for `krm version --short` in a script.
+				fmt.Fprintln(out, info.Short())
+			case f.output == string(render.FormatJSON):
+				enc := json.NewEncoder(out)
+				enc.SetIndent("", "  ")
+				return enc.Encode(info)
+			default:
+				fmt.Fprintln(out, info.String())
+			}
+			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&short, "short", false, "print only the version string")
+	return cmd
 }
 
 // runOnce collects a single snapshot and writes it in the requested format.

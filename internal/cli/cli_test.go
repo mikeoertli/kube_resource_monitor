@@ -364,3 +364,55 @@ func TestHelpLeadsWithTheModeTable(t *testing.T) {
 		t.Errorf("help should carry worked examples:\n%s", out)
 	}
 }
+
+func TestVersionCommandForms(t *testing.T) {
+	full, err := run(t, "version")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.HasPrefix(full, "krm ") {
+		t.Errorf("unexpected version output: %q", full)
+	}
+	// The Go version and platform come from the runtime, so they are always
+	// knowable and always worth printing in a bug report.
+	for _, want := range []string{"go1.", "/"} {
+		if !strings.Contains(full, want) {
+			t.Errorf("version output missing %q: %q", want, full)
+		}
+	}
+
+	short, err := run(t, "version", "--short")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if strings.Contains(short, " ") {
+		t.Errorf("--short should print a bare version for scripts, got %q", short)
+	}
+	if strings.HasPrefix(short, "krm") {
+		t.Errorf("--short should omit the program name, got %q", short)
+	}
+}
+
+func TestVersionJSON(t *testing.T) {
+	out, err := run(t, "version", "-o", "json")
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+	var doc struct {
+		Version   string `json:"version"`
+		GoVersion string `json:"goVersion"`
+		Platform  string `json:"platform"`
+		Source    string `json:"source"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("not valid JSON: %v\n%s", err, out)
+	}
+	if doc.Version == "" || doc.GoVersion == "" || doc.Platform == "" {
+		t.Errorf("incomplete version document: %+v", doc)
+	}
+	// Without this field, "why does my build say dev?" has no answer short of
+	// rebuilding.
+	if doc.Source == "" {
+		t.Error("version JSON should say where the version came from")
+	}
+}

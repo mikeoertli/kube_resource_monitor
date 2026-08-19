@@ -239,6 +239,26 @@ krm top --demo -A
 The demo cluster deliberately includes the awkward cases: a workload with no
 limits, a container over its limit, an unscraped pod, and a nearly-full volume.
 
+## Versioning
+
+`krm` follows [Semantic Versioning](https://semver.org/) and keeps a
+[CHANGELOG](CHANGELOG.md). It is pre-1.0, so breaking changes land in minor
+bumps; the changelog states exactly which surfaces are covered by that promise
+and which (colors, key bindings, log wording) are not.
+
+```sh
+krm version              # krm v0.1.0 (commit abcdef1, built ..., go1.24.7, darwin/arm64)
+krm version --short      # v0.1.0
+krm version -o json      # machine-readable, including where the version came from
+```
+
+The version resolves from whichever source is available: `-ldflags` when built
+through the Makefile, the module version when installed with
+`go install ...@v0.1.0`, and the git revision when built from a checkout. A
+build from a modified tree is marked `-dirty`. The `source` field in the JSON
+output says which route a given binary took, which is the quickest way to
+explain a version that reads `dev`.
+
 ## Development
 
 ```sh
@@ -247,12 +267,26 @@ make build   # build ./bin/krm
 make test    # go test ./...
 make check   # gofmt, go vet, and tests
 make demo    # run the interactive view against synthetic data
+make version # show what a build right now would report
 ```
+
+### Releasing
+
+Versions come from git tags; nothing is generated into the tree.
+
+1. Move the `## [Unreleased]` entries in `CHANGELOG.md` under a new
+   `## [0.2.0] - YYYY-MM-DD` heading and update the link definitions at the
+   bottom.
+2. Commit.
+3. `make tag V=0.2.0` — this refuses to tag a dirty tree, a version the
+   changelog does not describe, or a tag that already exists, and runs
+   `make check` before tagging.
+4. `git push origin main --follow-tags`
 
 `go.sum` is not committed. Run `make deps` (or `go mod tidy`) once after
 cloning to generate it; every dependency version is already pinned in
 `go.mod`.
 
-## Licence
+## License
 
 MIT.
