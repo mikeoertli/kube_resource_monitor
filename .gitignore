@@ -1,0 +1,13 @@
+bin/
+coverage.out
+*.test
+dist/
+
+# Dev-only: this repo was bootstrapped in a sandbox that could only reach
+# github.com, so the module graph was resolved via mirror replaces. Those must
+# never be committed.
+go.work
+go.work.sum
+resolve.sh
+pins.sh
+.envrc.dev
